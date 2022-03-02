@@ -1507,12 +1507,18 @@ class DPRContextEncoder(LanguageModel):
                 return_dict=True,
             )
         else:
-            output_tuple = self.model( # Breaks for MUSE because of token_type_ids
-                input_ids=passage_input_ids,
-                token_type_ids=passage_segment_ids,
-                attention_mask=passage_attention_mask,
-                return_dict=True,
-            )
+            try:
+                output_tuple = self.model( # Breaks for MUSE because of token_type_ids
+                    input_ids=passage_input_ids,
+                    token_type_ids=passage_segment_ids,
+                    attention_mask=passage_attention_mask,
+                    return_dict=True,
+                )
+            except:
+                output_tuple = self.model(
+                    input_ids=passage_input_ids,
+                    attention_mask=passage_attention_mask,
+                    return_dict=True,)
         if self.model.ctx_encoder.config.output_hidden_states == True:
             pooled_output, all_hidden_states = output_tuple.pooler_output, output_tuple.hidden_states
             return pooled_output, all_hidden_states
