@@ -31,7 +31,6 @@ try:
 except ImportError:
     AMP_AVAILABLE = False
 
-
 logger = logging.getLogger(__name__)
 
 try:
@@ -48,14 +47,14 @@ class EarlyStopping:
     """
 
     def __init__(
-        self,
-        head: int = 0,
-        metric: str = "loss",
-        save_dir: Optional[str] = None,
-        mode: str = "min",
-        patience: int = 0,
-        min_delta: float = 0.001,
-        min_evals: int = 0,
+            self,
+            head: int = 0,
+            metric: str = "loss",
+            save_dir: Optional[str] = None,
+            mode: str = "min",
+            patience: int = 0,
+            min_delta: float = 0.001,
+            min_evals: int = 0,
     ):
         """
         :param head: the prediction head referenced by the metric.
@@ -128,33 +127,33 @@ class Trainer:
     """
 
     def __init__(
-        self,
-        model,
-        optimizer,
-        data_silo: DataSilo,
-        epochs: int,
-        n_gpu: int,
-        device,
-        lr_schedule=None,
-        evaluate_every: int = 100,
-        eval_report: bool = True,
-        use_amp: Optional[str] = None,
-        grad_acc_steps: int = 1,
-        local_rank: int = -1,
-        early_stopping: Optional[EarlyStopping] = None,
-        logging_wandb: bool = False,
-        log_learning_rate: bool = False,
-        log_loss_every: int = 10,
-        checkpoint_on_sigterm: bool = False,
-        checkpoint_every: Optional[int] = None,
-        checkpoint_root_dir: Optional[Path] = None,
-        checkpoints_to_keep: int = 3,
-        from_epoch: int = 0,
-        from_step: int = 0,
-        global_step: int = 0,
-        evaluator_test: bool = True,
-        disable_tqdm: bool = False,
-        max_grad_norm: float = 1.0,
+            self,
+            model,
+            optimizer,
+            data_silo: DataSilo,
+            epochs: int,
+            n_gpu: int,
+            device,
+            lr_schedule=None,
+            evaluate_every: int = 100,
+            eval_report: bool = True,
+            use_amp: Optional[str] = None,
+            grad_acc_steps: int = 1,
+            local_rank: int = -1,
+            early_stopping: Optional[EarlyStopping] = None,
+            logging_wandb: bool = False,
+            log_learning_rate: bool = False,
+            log_loss_every: int = 10,
+            checkpoint_on_sigterm: bool = False,
+            checkpoint_every: Optional[int] = None,
+            checkpoint_root_dir: Optional[Path] = None,
+            checkpoints_to_keep: int = 3,
+            from_epoch: int = 0,
+            from_step: int = 0,
+            global_step: int = 0,
+            evaluator_test: bool = True,
+            disable_tqdm: bool = False,
+            max_grad_norm: float = 1.0,
     ):
         """
         :param optimizer: An optimizer object that determines the learning strategy to be used during training
@@ -226,6 +225,8 @@ class Trainer:
                                    "num_positives_ctx": self.data_silo.processor.num_positives,
                                    "train_filename": self.data_silo.processor.train_filename,
                                    "dev_filename": self.data_silo.processor.dev_filename,
+                                   "best_model_iter": 0,
+                                   "best_model_epoch": 0,
                                })
                 else:
                     wandb.init(project="DPR training",
@@ -315,7 +316,7 @@ class Trainer:
                     else:
                         continue
 
-                progress_bar.set_description(f"Train epoch {epoch}/{self.epochs-1} (Cur. train loss: {loss:.4f})")
+                progress_bar.set_description(f"Train epoch {epoch}/{self.epochs - 1} (Cur. train loss: {loss:.4f})")
 
                 # Only for distributed training: we need to ensure that all ranks still have a batch left for training
                 if self.local_rank != -1:
@@ -332,10 +333,10 @@ class Trainer:
 
                 # Perform  evaluation
                 if (
-                    self.evaluate_every != 0
-                    and self.global_step % self.evaluate_every == 0
-                    and self.global_step != 0
-                    and self.local_rank in [0, -1]
+                        self.evaluate_every != 0
+                        and self.global_step % self.evaluate_every == 0
+                        and self.global_step != 0
+                        and self.local_rank in [0, -1]
                 ):
                     dev_data_loader = self.data_silo.get_data_loader("dev")
                     if dev_data_loader is not None:
@@ -358,8 +359,9 @@ class Trainer:
                         if self.early_stopping:
                             do_stopping, save_model, eval_value = self.early_stopping.check_stopping(result)
                             if save_model:
-                                # if self.logging_wandb:
-                                #     wandb.config.update({"best_model_iter": step, "best_model_epoch": epoch})
+                                if self.logging_wandb:
+                                    wandb.config.update({"best_model_iter": step, "best_model_epoch": epoch},
+                                                        allow_val_change=True)
                                 logger.info(
                                     "Saving current best model to {}, eval={}".format(
                                         self.early_stopping.save_dir, eval_value
@@ -406,8 +408,9 @@ class Trainer:
             logger.info("Restoring best model so far from {}".format(self.early_stopping.save_dir))
             # lm_name1 = self.model.language_model1.name
             # lm_name2 = self.model.language_model2.name
-            #self.model = AdaptiveModel.load(self.early_stopping.save_dir, self.device, lm_name=lm_name)
-            self.model = BiAdaptiveModel.load(load_dir=self.early_stopping.save_dir, lm1_name="lm1", lm2_name="lm2", device=self.device)
+            # self.model = AdaptiveModel.load(self.early_stopping.save_dir, self.device, lm_name=lm_name)
+            self.model = BiAdaptiveModel.load(load_dir=self.early_stopping.save_dir, lm1_name="lm1", lm2_name="lm2",
+                                              device=self.device)
             self.model.connect_heads_with_processor(self.data_silo.processor.tasks, require_labels=True)
 
         # Eval on test set
@@ -464,14 +467,14 @@ class Trainer:
 
     @classmethod
     def create_or_load_checkpoint(
-        cls,
-        data_silo: DataSilo,
-        checkpoint_root_dir: Path,
-        model,
-        optimizer,
-        local_rank: int = -1,
-        resume_from_checkpoint: str = "latest",
-        **kwargs,
+            cls,
+            data_silo: DataSilo,
+            checkpoint_root_dir: Path,
+            model,
+            optimizer,
+            local_rank: int = -1,
+            resume_from_checkpoint: str = "latest",
+            **kwargs,
     ):
         """
         Try loading a saved Trainer checkpoint. If no checkpoint found, it creates a new instance of Trainer.
@@ -622,12 +625,12 @@ class Trainer:
             pickle_module=dill,
         )
 
-        checkpoint_name = f"epoch_{self.from_epoch}_step_{self.from_step-1}"
+        checkpoint_name = f"epoch_{self.from_epoch}_step_{self.from_step - 1}"
         checkpoint_path.replace(Path(checkpoint_path.parent) / checkpoint_name)
 
         saved_checkpoints = self._get_checkpoints(self.checkpoint_root_dir)
         if len(saved_checkpoints) > self.checkpoints_to_keep:
-            for cp in saved_checkpoints[self.checkpoints_to_keep :]:
+            for cp in saved_checkpoints[self.checkpoints_to_keep:]:
                 shutil.rmtree(cp)
 
         logger.info(f"Saved a training checkpoint after {checkpoint_name}")
@@ -707,35 +710,35 @@ class DistillationTrainer(Trainer):
     """
 
     def __init__(
-        self,
-        model: "AdaptiveModel",
-        optimizer: Optimizer,
-        data_silo: DistillationDataSilo,
-        epochs: int,
-        n_gpu: int,
-        device: str,
-        lr_schedule: Optional["_LRScheduler"] = None,
-        evaluate_every: int = 100,
-        eval_report: bool = True,
-        use_amp: Optional[str] = None,
-        grad_acc_steps: int = 1,
-        local_rank: int = -1,
-        early_stopping: Optional[EarlyStopping] = None,
-        log_learning_rate: bool = False,
-        log_loss_every: int = 10,
-        checkpoint_on_sigterm: bool = False,
-        checkpoint_every: Optional[int] = None,
-        checkpoint_root_dir: Optional[Path] = None,
-        checkpoints_to_keep: int = 3,
-        from_epoch: int = 0,
-        from_step: int = 0,
-        global_step: int = 0,
-        evaluator_test: bool = True,
-        disable_tqdm: bool = False,
-        max_grad_norm: float = 1.0,
-        distillation_loss_weight: float = 0.5,
-        distillation_loss: Union[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = "kl_div",
-        temperature: float = 1.0,
+            self,
+            model: "AdaptiveModel",
+            optimizer: Optimizer,
+            data_silo: DistillationDataSilo,
+            epochs: int,
+            n_gpu: int,
+            device: str,
+            lr_schedule: Optional["_LRScheduler"] = None,
+            evaluate_every: int = 100,
+            eval_report: bool = True,
+            use_amp: Optional[str] = None,
+            grad_acc_steps: int = 1,
+            local_rank: int = -1,
+            early_stopping: Optional[EarlyStopping] = None,
+            log_learning_rate: bool = False,
+            log_loss_every: int = 10,
+            checkpoint_on_sigterm: bool = False,
+            checkpoint_every: Optional[int] = None,
+            checkpoint_root_dir: Optional[Path] = None,
+            checkpoints_to_keep: int = 3,
+            from_epoch: int = 0,
+            from_step: int = 0,
+            global_step: int = 0,
+            evaluator_test: bool = True,
+            disable_tqdm: bool = False,
+            max_grad_norm: float = 1.0,
+            distillation_loss_weight: float = 0.5,
+            distillation_loss: Union[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = "kl_div",
+            temperature: float = 1.0,
     ):
         """
         :param optimizer: An optimizer object that determines the learning strategy to be used during training
@@ -823,8 +826,8 @@ class DistillationTrainer(Trainer):
         distillation_loss = self.distillation_loss_fn(
             student_logits=logits[0] / self.temperature, teacher_logits=teacher_logits[0] / self.temperature
         )
-        combined_loss = distillation_loss * self.distillation_loss_weight * (self.temperature**2) + student_loss * (
-            1 - self.distillation_loss_weight
+        combined_loss = distillation_loss * self.distillation_loss_weight * (self.temperature ** 2) + student_loss * (
+                1 - self.distillation_loss_weight
         )
         return self.backward_propagate(combined_loss, step)
 
@@ -851,33 +854,33 @@ class TinyBERTDistillationTrainer(Trainer):
     """
 
     def __init__(
-        self,
-        model: AdaptiveModel,
-        teacher_model: AdaptiveModel,
-        optimizer: Optimizer,
-        data_silo: DistillationDataSilo,
-        epochs: int,
-        n_gpu: int,
-        device: torch.device,
-        lr_schedule: Optional["_LRScheduler"] = None,
-        evaluate_every: int = 100,
-        eval_report: bool = True,
-        use_amp: Optional[str] = None,
-        grad_acc_steps: int = 1,
-        local_rank: int = -1,
-        early_stopping: Optional[EarlyStopping] = None,
-        log_learning_rate: bool = False,
-        log_loss_every: int = 10,
-        checkpoint_on_sigterm: bool = False,
-        checkpoint_every: Optional[int] = None,
-        checkpoint_root_dir: Optional[Path] = None,
-        checkpoints_to_keep: int = 3,
-        from_epoch: int = 0,
-        from_step: int = 0,
-        global_step: int = 0,
-        evaluator_test: bool = True,
-        disable_tqdm: bool = False,
-        max_grad_norm: float = 1.0,
+            self,
+            model: AdaptiveModel,
+            teacher_model: AdaptiveModel,
+            optimizer: Optimizer,
+            data_silo: DistillationDataSilo,
+            epochs: int,
+            n_gpu: int,
+            device: torch.device,
+            lr_schedule: Optional["_LRScheduler"] = None,
+            evaluate_every: int = 100,
+            eval_report: bool = True,
+            use_amp: Optional[str] = None,
+            grad_acc_steps: int = 1,
+            local_rank: int = -1,
+            early_stopping: Optional[EarlyStopping] = None,
+            log_learning_rate: bool = False,
+            log_loss_every: int = 10,
+            checkpoint_on_sigterm: bool = False,
+            checkpoint_every: Optional[int] = None,
+            checkpoint_root_dir: Optional[Path] = None,
+            checkpoints_to_keep: int = 3,
+            from_epoch: int = 0,
+            from_step: int = 0,
+            global_step: int = 0,
+            evaluator_test: bool = True,
+            disable_tqdm: bool = False,
+            max_grad_norm: float = 1.0,
     ):
         """
         :param optimizer: An optimizer object that determines the learning strategy to be used during training
@@ -1007,9 +1010,8 @@ class DistillationLoss(Module):
 
         # calculating attention loss
         for student_attention, teacher_attention, dim_mapping in zip(
-            attentions, teacher_attentions[self.teacher_block_size - 1 :: self.teacher_block_size], self.dim_mappings
+                attentions, teacher_attentions[self.teacher_block_size - 1:: self.teacher_block_size], self.dim_mappings
         ):
-
             # this wasn't described in the paper, but it was used in the original implementation
             student_attention = torch.where(
                 student_attention <= -1e2, torch.zeros_like(student_attention), student_attention
@@ -1022,7 +1024,7 @@ class DistillationLoss(Module):
 
         # calculating hidden state loss
         for student_hidden_state, teacher_hidden_state in zip(
-            hidden_states, teacher_hidden_states[:: self.teacher_block_size]
+                hidden_states, teacher_hidden_states[:: self.teacher_block_size]
         ):
             # linear mapping in case the teacher and student model have different hidden state dimensions, not necessary for attention as attention shape is determined by number of attention heads and sequence length
             if dim_mapping:
