@@ -454,6 +454,7 @@ class DensePassageRetriever(BaseRetriever):
             use_amp=use_amp,
             early_stopping=early_stopping,
             logging_wandb=logging_wandb,
+            eval_report=False,
         )
 
         # 7. Let it grow! Watch the tracked metrics live on the public mlflow server: https://public-mlflow.deepset.ai
