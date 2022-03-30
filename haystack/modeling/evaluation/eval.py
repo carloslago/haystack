@@ -77,7 +77,7 @@ class Evaluator:
 
         # Evaluate per prediction head
         all_results = []
-        for head_num, head in enumerate(tqdm(model.prediction_heads, desc="Agreggating preds")):
+        for head_num, head in enumerate(model.prediction_heads):
             if head.model_type == "span_classification" and calibrate_conf_scores:
                 temperature_previous = head.temperature_for_confidence.item()
                 logger.info(f"temperature used for confidence scores before calibration: {temperature_previous}")
