@@ -84,16 +84,16 @@ def initialize_device_settings(
     return devices, n_gpu
 
 
-def flatten_list(nested_list):
+def new_flatten_list(nested_list):
     """Yield items from any nested iterable"""
     for x in nested_list:
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
-            for sub_x in flatten_list(x):
+            for sub_x in new_flatten_list(x):
                 yield sub_x
         else:
             yield x
 
-def old_flatten_list(nested_list):
+def flatten_list(nested_list):
     """Flatten an arbitrarily nested list, without recursion (to avoid
     stack overflows). Returns a new list, the original list is unchanged.
     >> list(flatten_list([1, 2, 3, [4], [], [[[[[[[[[5]]]]]]]]]]))
