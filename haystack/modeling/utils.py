@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 from torch import multiprocessing as mp
+from typing import Iterable
 
 from haystack.modeling.visual import WORKER_M, WORKER_F, WORKER_X
 
@@ -84,6 +85,15 @@ def initialize_device_settings(
 
 
 def flatten_list(nested_list):
+    """Yield items from any nested iterable"""
+    for x in nested_list:
+        if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
+            for sub_x in flatten_list(x):
+                yield sub_x
+        else:
+            yield x
+
+def old_flatten_list(nested_list):
     """Flatten an arbitrarily nested list, without recursion (to avoid
     stack overflows). Returns a new list, the original list is unchanged.
     >> list(flatten_list([1, 2, 3, [4], [], [[[[[[[[[5]]]]]]]]]]))
