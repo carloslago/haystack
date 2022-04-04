@@ -343,6 +343,8 @@ class DensePassageRetriever(BaseRetriever):
         multiprocessing_strategy: Optional[str] = None,
         early_stopping: Optional[EarlyStopping] = None,
         logging_wandb: bool=False,
+        checkpoint_every: Optional[int] = None,
+        checkpoint_root_dir: Optional[Path] = None,
         dev_split: float = 0,
         batch_size: int = 2,
         embed_title: bool = True,
@@ -455,6 +457,8 @@ class DensePassageRetriever(BaseRetriever):
             early_stopping=early_stopping,
             logging_wandb=logging_wandb,
             eval_report=False,
+            checkpoint_every=checkpoint_every,
+            checkpoint_root_dir=checkpoint_root_dir,
         )
 
         # 7. Let it grow! Watch the tracked metrics live on the public mlflow server: https://public-mlflow.deepset.ai
