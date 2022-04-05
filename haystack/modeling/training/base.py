@@ -156,6 +156,7 @@ class Trainer:
             max_grad_norm: float = 1.0,
             query_encoder_save_dir: Optional[str] = "lm1",
             passage_encoder_save_dir: Optional[str] = "lm2",
+            retriever=None,
     ):
         """
         :param optimizer: An optimizer object that determines the learning strategy to be used during training
@@ -213,6 +214,7 @@ class Trainer:
         self.logging_wandb = logging_wandb
         self.query_encoder_save_dir = query_encoder_save_dir
         self.passage_encoder_save_dir = passage_encoder_save_dir
+        self.retriever = retriever
 
         if self.logging_wandb:
             try:
@@ -372,8 +374,11 @@ class Trainer:
                                         self.early_stopping.save_dir, eval_value
                                     )
                                 )
-                                self.model.save(self.early_stopping.save_dir, lm1_name=self.query_encoder_save_dir,
-                                                lm2_name=self.passage_encoder_save_dir)
+                                # self.model.save(self.early_stopping.save_dir, lm1_name=self.query_encoder_save_dir,
+                                #                 lm2_name=self.passage_encoder_save_dir)
+                                self.retriever.save(save_dir=self.early_stopping.save_dir,
+                                                    query_encoder_dir=self.query_encoder_save_dir,
+                                                    passage_encoder_dir=self.passage_encoder_save_dir)
                                 self.data_silo.processor.save(self.early_stopping.save_dir)
                             if do_stopping:
                                 # log the stopping
@@ -415,8 +420,9 @@ class Trainer:
             # lm_name1 = self.model.language_model1.name
             # lm_name2 = self.model.language_model2.name
             # self.model = AdaptiveModel.load(self.early_stopping.save_dir, self.device, lm_name=lm_name)
-            self.model = BiAdaptiveModel.load(load_dir=self.early_stopping.save_dir, lm1_name=self.query_encoder_save_dir,
-                                                lm2_name=self.passage_encoder_save_dir, device=self.device)
+            self.model = BiAdaptiveModel.load(load_dir=self.early_stopping.save_dir,
+                                              lm1_name=self.query_encoder_save_dir,
+                                              lm2_name=self.passage_encoder_save_dir, device=self.device)
             self.model.connect_heads_with_processor(self.data_silo.processor.tasks, require_labels=True)
 
         # Eval on test set
@@ -614,7 +620,11 @@ class Trainer:
 
         # save as a regular AdaptiveModel (e.g. for down-stream eval during training from scratch)
         # self.model.save(checkpoint_path)
-        self.model.save(checkpoint_path, lm1_name=self.query_encoder_save_dir, lm2_name=self.passage_encoder_save_dir)
+        self.retriever.save(save_dir=checkpoint_path,
+                            query_encoder_dir=self.query_encoder_save_dir,
+                            passage_encoder_dir=self.passage_encoder_save_dir)
+        # self.model.save(checkpoint_path, lm1_name=self.query_encoder_save_dir, lm2_name=self.passage_encoder_save_dir)
+        self.data_silo.processor.save(checkpoint_path)
 
         # save all state dicst (incl. the model) to have full reproducibility
         torch.save(

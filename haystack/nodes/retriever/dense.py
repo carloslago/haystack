@@ -469,6 +469,7 @@ class DensePassageRetriever(BaseRetriever):
             checkpoints_to_keep=checkpoints_to_keep,
             query_encoder_save_dir=query_encoder_save_dir,
             passage_encoder_save_dir=passage_encoder_save_dir,
+            retriever=self
         )
 
         # 7. Let it grow! Watch the tracked metrics live on the public mlflow server: https://public-mlflow.deepset.ai
@@ -495,8 +496,7 @@ class DensePassageRetriever(BaseRetriever):
         :param passage_encoder_dir: Directory in save_dir that contains passage encoder model.
         :return: None
         """
-        save_dir = Path(save_dir)
-        self.model.save(save_dir, lm1_name=query_encoder_dir, lm2_name=passage_encoder_dir)
+        self.model.save(Path(save_dir), lm1_name=query_encoder_dir, lm2_name=passage_encoder_dir)
         save_dir = str(save_dir)
         self.query_tokenizer.save_pretrained(save_dir + f"/{query_encoder_dir}")
         self.passage_tokenizer.save_pretrained(save_dir + f"/{passage_encoder_dir}")
