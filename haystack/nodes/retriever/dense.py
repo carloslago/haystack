@@ -467,6 +467,8 @@ class DensePassageRetriever(BaseRetriever):
             from_step=from_step,
             checkpoint_on_sigterm=checkpoint_on_sigterm,
             checkpoints_to_keep=checkpoints_to_keep,
+            query_encoder_save_dir=query_encoder_save_dir,
+            passage_encoder_save_dir=passage_encoder_save_dir,
         )
 
         # 7. Let it grow! Watch the tracked metrics live on the public mlflow server: https://public-mlflow.deepset.ai
