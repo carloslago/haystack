@@ -343,6 +343,12 @@ class BinaryPassageRetriever(BaseRetriever):
         multiprocessing_strategy: Optional[str] = None,
         early_stopping: Optional[EarlyStopping] = None,
         logging_wandb: bool=False,
+        checkpoint_every: Optional[int] = None,
+        checkpoint_root_dir: Optional[Path] = None,
+        from_epoch: int = 0,
+        from_step: int = 0,
+        checkpoint_on_sigterm: bool = False,
+        checkpoints_to_keep: int = 5,
         dev_split: float = 0,
         batch_size: int = 2,
         embed_title: bool = True,
@@ -455,6 +461,15 @@ class BinaryPassageRetriever(BaseRetriever):
             early_stopping=early_stopping,
             logging_wandb=logging_wandb,
             eval_report=False,
+            checkpoint_every=checkpoint_every,
+            checkpoint_root_dir=checkpoint_root_dir,
+            from_epoch=from_epoch,
+            from_step=from_step,
+            checkpoint_on_sigterm=checkpoint_on_sigterm,
+            checkpoints_to_keep=checkpoints_to_keep,
+            query_encoder_save_dir=query_encoder_save_dir,
+            passage_encoder_save_dir=passage_encoder_save_dir,
+            retriever=self
         )
 
         # 7. Let it grow! Watch the tracked metrics live on the public mlflow server: https://public-mlflow.deepset.ai

@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from copy import deepcopy
 from collections import defaultdict
-from scipy.spatial.distance import cosine
+from scipy.spatial.distance import cosine, hamming
 from tqdm import tqdm
 
 from haystack.schema import Document, Label
@@ -216,6 +216,11 @@ class InMemoryDocumentStore(BaseDocumentStore):
         elif len(doc_embeds.shape) == 1 and doc_embeds.shape[0] == 0:
             return []
 
+        if self.similarity == "hamming":
+            # scores = [hamming(doc, query) * len(doc) for doc in docs]
+            scores = np.count_nonzero(doc_embeds != query_emb, axis=1)
+            return scores
+
         if self.similarity == "cosine":
             # cosine similarity is just a normed dot product
             query_emb_norm = torch.norm(query_emb, dim=1)
@@ -254,6 +259,11 @@ class InMemoryDocumentStore(BaseDocumentStore):
             doc_embeds = doc_embeds.unsqueeze(dim=0)
         elif len(doc_embeds.shape) == 1 and doc_embeds.shape[0] == 0:
             return []
+
+        if self.similarity == "hamming":
+            # scores = [hamming(doc, query_emb)*len(doc) for doc in doc_embeds]
+            scores = np.count_nonzero(doc_embeds != query_emb, axis=1)
+            return scores
 
         if self.similarity == "cosine":
             # cosine similarity is just a normed dot product
@@ -378,7 +388,10 @@ class InMemoryDocumentStore(BaseDocumentStore):
             new_document.score = self.finalize_raw_score(score, self.similarity)
             candidate_docs.append(new_document)
 
-        return sorted(candidate_docs, key=lambda x: x.score if x.score is not None else 0.0, reverse=True)[0:top_k]
+        if self.similarity != "hamming":
+            return sorted(candidate_docs, key=lambda x: x.score if x.score is not None else 0.0, reverse=True)[0:top_k]
+        else:
+            return sorted(candidate_docs, key=lambda x: x.score if x.score is not None else 0.0, reverse=False)[0:top_k]
 
     def update_embeddings(
         self,

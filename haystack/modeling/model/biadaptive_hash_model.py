@@ -301,9 +301,8 @@ class BiAdaptiveHashModel(nn.Module):
                     output2 = None
 
                 embedding1, embedding2 = head(output1, output2)
-                print("Converting to binary")
-                embedding1 = self.convert_to_binary_code(embedding1)
-                embedding2 = self.convert_to_binary_code(embedding2)
+                if embedding1 is not None: embedding1 = self.convert_to_binary_code(embedding1)
+                if embedding2 is not None: embedding2 = self.convert_to_binary_code(embedding2)
                 all_logits.append(tuple([embedding1, embedding2]))
         else:
             # just return LM output (e.g. useful for extracting embeddings at inference time)
