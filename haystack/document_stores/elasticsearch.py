@@ -179,7 +179,7 @@ class ElasticsearchDocumentStore(KeywordDocumentStore):
         self.label_index: str = label_index
         self.scroll = scroll
         self.skip_missing_embeddings: bool = skip_missing_embeddings
-        if similarity in ["cosine", "dot_product", "l2"]:
+        if similarity in ["cosine", "dot_product", "l2", "hamming"]:
             self.similarity = similarity
         else:
             raise Exception(
@@ -1219,6 +1219,8 @@ class ElasticsearchDocumentStore(KeywordDocumentStore):
             similarity_fn_name = "dotProduct"
         elif self.similarity == "l2":
             similarity_fn_name = "l2norm"
+        elif self.similarity == "hamming":
+            similarity_fn_name = "hamming_distance"
         else:
             raise Exception(
                 "Invalid value for similarity in ElasticSearchDocumentStore constructor. Choose between 'cosine', 'dot_product' and 'l2'"
