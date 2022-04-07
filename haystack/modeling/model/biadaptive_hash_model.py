@@ -502,5 +502,5 @@ class BiAdaptiveHashModel(nn.Module):
             scale = math.pow((1.0 + self.iter_number * self.hashnet_gamma), 0.5)
             return torch.tanh(input_repr * scale)
         else:
-            return input_repr.new_ones(input_repr.size()).masked_fill_(input_repr < 0, -1.0).to(torch.uint8)
-            # return input_repr.new_ones(input_repr.size()).masked_fill_(input_repr < 0, -1.0)
+            # return input_repr.new_ones(input_repr.size()).masked_fill_(input_repr < 0, -1.0).to(torch.uint8)
+            return input_repr.new_ones(input_repr.size()).masked_fill_(input_repr < 0, -1.0)
