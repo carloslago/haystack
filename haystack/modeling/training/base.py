@@ -453,8 +453,11 @@ class Trainer:
             with amp.scale_loss(loss, self.optimizer) as scaled_loss:
                 scaled_loss.backward()
         else:
-            # loss.retain_grad()
-            loss.backward()
+            try:
+                loss.backward()
+            except:
+                loss.requires_grad = True
+                loss.backward()
 
         if step % self.grad_acc_steps == 0:
             if self.max_grad_norm is not None:
