@@ -15,7 +15,7 @@ from haystack.nodes.retriever.base import BaseRetriever
 from haystack.modeling.model.tokenization import Tokenizer
 from haystack.modeling.model.language_model import LanguageModel
 from haystack.modeling.model.biadaptive_hash_model import BiAdaptiveHashModel
-from haystack.modeling.model.prediction_head import TextSimilarityHead
+from haystack.modeling.model.prediction_head import TextSimilarityHead, BinarySimilarityHead
 from haystack.modeling.data_handler.processor import TextSimilarityProcessor
 from haystack.modeling.data_handler.data_silo import DataSilo
 from haystack.modeling.data_handler.dataloader import NamedDataLoader
@@ -182,7 +182,7 @@ class BinaryPassageRetriever(BaseRetriever):
             num_hard_negatives=0,
             num_positives=1,
         )
-        prediction_head = TextSimilarityHead(
+        prediction_head = BinarySimilarityHead(
             similarity_function=similarity_function, global_loss_buffer_size=global_loss_buffer_size
         )
         self.model = BiAdaptiveHashModel(
