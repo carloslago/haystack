@@ -218,6 +218,7 @@ class InMemoryDocumentStore(BaseDocumentStore):
 
         if self.similarity == "hamming":
             # scores = [hamming(doc, query) * len(doc) for doc in docs]
+            doc_embeds.to(self.main_device)
             scores = np.count_nonzero(doc_embeds != query_emb, axis=1)
             return scores
 
