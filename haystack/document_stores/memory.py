@@ -218,8 +218,9 @@ class InMemoryDocumentStore(BaseDocumentStore):
 
         if self.similarity == "hamming":
             # scores = [hamming(doc, query) * len(doc) for doc in docs]
-            doc_embeds.to(self.main_device)
-            scores = np.count_nonzero(doc_embeds != query_emb, axis=1)
+            query_emb = query_emb.cpu().numpy()
+            doc_embeds = doc_embeds.cpu().numpy()
+            scores = np.count_nonzero(doc_embeds != query_emb, axis=1).tolist()
             return scores
 
         if self.similarity == "cosine":
@@ -263,7 +264,7 @@ class InMemoryDocumentStore(BaseDocumentStore):
 
         if self.similarity == "hamming":
             # scores = [hamming(doc, query_emb)*len(doc) for doc in doc_embeds]
-            scores = np.count_nonzero(doc_embeds != query_emb, axis=1)
+            scores = np.count_nonzero(doc_embeds != query_emb, axis=1).tolist()
             return scores
 
         if self.similarity == "cosine":
