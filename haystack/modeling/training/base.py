@@ -385,6 +385,7 @@ class Trainer:
                                 logger.info(
                                     "STOPPING EARLY AT EPOCH {}, STEP {}, EVALUATION {}".format(epoch, step, evalnr)
                                 )
+                        self.model.training = True
                 if do_stopping:
                     break
 
@@ -453,11 +454,7 @@ class Trainer:
             with amp.scale_loss(loss, self.optimizer) as scaled_loss:
                 scaled_loss.backward()
         else:
-            try:
-                loss.backward()
-            except:
-                loss.requires_grad = True
-                loss.backward()
+            loss.backward()
 
         if step % self.grad_acc_steps == 0:
             if self.max_grad_norm is not None:

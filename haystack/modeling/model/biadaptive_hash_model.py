@@ -500,7 +500,9 @@ class BiAdaptiveHashModel(nn.Module):
         if self.training:
             # https://github.com/thuml/HashNet/blob/55bcaaa0bbaf0c404ca7a071b47d6287dc95e81d/pytorch/src/network.py#L40
             scale = math.pow((1.0 + self.iter_number * self.hashnet_gamma), 0.5)
-            return torch.tanh(input_repr * scale)
+            result = torch.tanh(input_repr * scale)
         else:
             # return input_repr.new_ones(input_repr.size()).masked_fill_(input_repr < 0, -1.0).to(torch.uint8)
-            return input_repr.new_ones(input_repr.size()).masked_fill_(input_repr < 0, -1.0)
+            result = input_repr.new_ones(input_repr.size()).masked_fill_(input_repr < 0, -1.0)
+        result.to(self.device)
+        return result
