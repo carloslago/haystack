@@ -311,7 +311,7 @@ class Trainer:
             self.from_epoch = epoch
             train_data_loader = self.data_silo.get_data_loader("train")
             tqdm._instances.clear()
-            progress_bar = tqdm(train_data_loader, disable=self.local_rank not in [0, -1] or self.disable_tqdm)
+            progress_bar = tqdm(train_data_loader, disable=self.local_rank not in [0, -1] or self.disable_tqdm, position=0, leave=True)
             for step, batch in enumerate(progress_bar):
                 # when resuming training from a checkpoint, we want to fast forward to the step of the checkpoint
                 if resume_from_step and step <= resume_from_step:
