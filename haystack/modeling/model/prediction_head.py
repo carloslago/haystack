@@ -14,6 +14,7 @@ from transformers import AutoModelForQuestionAnswering
 from haystack.modeling.data_handler.samples import SampleBasket
 from haystack.modeling.model.predictions import QACandidate, QAPred
 from haystack.modeling.utils import try_get, all_gather_list
+import torch.nn.functional as F
 
 
 logger = logging.getLogger(__name__)
@@ -1113,7 +1114,7 @@ class BinarySimilarityHead(PredictionHead):
                                         Increase if errors like "encoded data exceeds max_size ..." come up
         :param kwargs:
         """
-        super(TextSimilarityHead, self).__init__()
+        super(BinarySimilarityHead, self).__init__()
 
         self.similarity_function = similarity_function
         self.loss_fct = NLLLoss(reduction="mean")
@@ -1121,6 +1122,8 @@ class BinarySimilarityHead(PredictionHead):
         self.model_type = "text_similarity"
         self.ph_output_type = "per_sequence"
         self.global_loss_buffer_size = global_loss_buffer_size
+        self.n_passages = 0
+        self.alpha = 2.0
         self.generate_config()
 
     @classmethod
@@ -1213,6 +1216,22 @@ class BinarySimilarityHead(PredictionHead):
         softmax_scores = nn.functional.log_softmax(scores, dim=1)
         return softmax_scores
 
+    def get_candidate_loss(self, binary_query, binary_passage):
+        labels = torch.arange(0, binary_query.size(0) * self.n_passages, self.n_passages)
+        labels = labels.to(binary_query.device)
+        binary_query_scores = torch.matmul(binary_query, binary_passage.transpose(0, 1))
+        pos_mask = binary_query_scores.new_zeros(binary_query_scores.size(), dtype=torch.bool)
+        for n, label in enumerate(labels):
+            pos_mask[n, label] = True
+        pos_bin_scores = torch.masked_select(binary_query_scores, pos_mask)
+        pos_bin_scores = pos_bin_scores.repeat_interleave(binary_passage.size(0) - 1)
+        neg_bin_scores = torch.masked_select(binary_query_scores, torch.logical_not(pos_mask))
+        bin_labels = pos_bin_scores.new_ones(pos_bin_scores.size(), dtype=torch.int64)
+        binary_loss = F.margin_ranking_loss(
+            pos_bin_scores, neg_bin_scores, bin_labels, self.alpha,
+        )
+        return binary_loss
+
     def logits_to_loss(self, logits: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], label_ids, **kwargs):  # type: ignore
         """
         Computes the loss (Default: NLLLoss) by applying a similarity function (Default: dot product) to the input
@@ -1233,6 +1252,8 @@ class BinarySimilarityHead(PredictionHead):
 
         # Prepare predicted scores
         query_binary_vectors, passage_binary_vectors, query_dense_vectors = logits
+
+        candidate_loss = self.get_candidate_loss(query_binary_vectors, passage_binary_vectors)
 
         # Prepare Labels
         positive_idx_per_question = torch.nonzero((label_ids.view(-1) == 1), as_tuple=False)
@@ -1267,8 +1288,8 @@ class BinarySimilarityHead(PredictionHead):
             global_passage_vectors = torch.cat(global_passage_vectors, dim=0)  # type: ignore
             global_positive_idx_per_question = torch.LongTensor(global_positive_idx_per_question)  # type: ignore
         else:
-            global_query_vectors = query_vectors  # type: ignore
-            global_passage_vectors = passage_vectors  # type: ignore
+            global_query_vectors = query_dense_vectors  # type: ignore
+            global_passage_vectors = passage_binary_vectors  # type: ignore
             global_positive_idx_per_question = positive_idx_per_question  # type: ignore
 
         # Get similarity scores
@@ -1277,9 +1298,9 @@ class BinarySimilarityHead(PredictionHead):
 
         # Calculate loss
         loss = self.loss_fct(softmax_scores, targets)
-        return loss
+        return loss + candidate_loss
 
-    def logits_to_preds(self, logits: Tuple[torch.Tensor, torch.Tensor], **kwargs) -> torch.Tensor:  # type: ignore
+    def logits_to_preds(self, logits: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], **kwargs) -> torch.Tensor:  # type: ignore
         """
         Returns predicted ranks(similarity) of passages/context for each query
 
@@ -1287,8 +1308,8 @@ class BinarySimilarityHead(PredictionHead):
 
         :return: predicted ranks of passages for each query
         """
-        query_vectors, passage_vectors = logits
-        softmax_scores = self._embeddings_to_scores(query_vectors, passage_vectors)
+        query_vectors, passage_vectors, dense_query = logits
+        softmax_scores = self._embeddings_to_scores(dense_query, passage_vectors)
         _, sorted_scores = torch.sort(softmax_scores, dim=1, descending=True)
         return sorted_scores
 

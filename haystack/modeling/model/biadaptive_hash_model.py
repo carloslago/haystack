@@ -301,15 +301,16 @@ class BiAdaptiveHashModel(nn.Module):
                     output2 = None
 
                 embedding1, embedding2 = head(output1, output2)
-                if not computing_loss:
-                    if embedding1 is not None: embedding1 = self.convert_to_binary_code(embedding1)
-                    if embedding2 is not None: embedding2 = self.convert_to_binary_code(embedding2)
-                    all_logits.append(tuple([embedding1, embedding2]))
-                else:
-                    binary_query = None
-                    if embedding1 is not None: binary_query = self.convert_to_binary_code(embedding1).to(torch.int8)
-                    if embedding2 is not None: binary_context = self.convert_to_binary_code(embedding2).to(torch.int8)
-                    all_logits.append(tuple([embedding1, embedding2, binary_query]))
+                # if not computing_loss:
+                #     if embedding1 is not None: embedding1 = self.convert_to_binary_code(embedding1)
+                #     if embedding2 is not None: embedding2 = self.convert_to_binary_code(embedding2)
+                #     all_logits.append(tuple([embedding1, embedding2]))
+                # else:
+                binary_query = None
+                binary_context = None
+                if embedding1 is not None: binary_query = self.convert_to_binary_code(embedding1) # .to(torch.int8)
+                if embedding2 is not None: binary_context = self.convert_to_binary_code(embedding2)
+                all_logits.append(tuple([binary_query, binary_context, embedding1]))
         else:
             # just return LM output (e.g. useful for extracting embeddings at inference time)
             all_logits.append((pooled_output))

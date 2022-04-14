@@ -208,7 +208,7 @@ class BinaryPassageRetriever(BaseRetriever):
         top_k: Optional[int] = None,
         index: str = None,
         headers: Optional[Dict[str, str]] = None,
-    ) -> List[Document]:
+    ) -> List[Document]: # TODO - should change so it uses query binary and dense representation. Generation and re-ranking
         """
         Scan through documents in DocumentStore and return a small number documents
         that are most relevant to the query.
@@ -255,7 +255,7 @@ class BinaryPassageRetriever(BaseRetriever):
         data_loader = NamedDataLoader(
             dataset=dataset, sampler=SequentialSampler(dataset), batch_size=self.batch_size, tensor_names=tensor_names
         )
-        all_embeddings = {"query": [], "passages": []}
+        all_embeddings = {"query": [], "passages": [], "dense_query": []}
         self.model.eval()
 
         # When running evaluations etc., we don't want a progress bar for every single query
@@ -277,17 +277,21 @@ class BinaryPassageRetriever(BaseRetriever):
 
                 # get logits
                 with torch.no_grad():
-                    query_embeddings, passage_embeddings = self.model.forward(**batch)[0]
-                    if query_embeddings is not None:
-                        all_embeddings["query"].append(query_embeddings.cpu().numpy())
-                    if passage_embeddings is not None:
-                        all_embeddings["passages"].append(passage_embeddings.cpu().numpy())
+                    binary_query, binary_passage, dense_query = self.model.forward(**batch)[0]
+                    if binary_query is not None:
+                        all_embeddings["query"].append(binary_query.cpu().numpy())
+                    if binary_passage is not None:
+                        all_embeddings["passages"].append(binary_passage.cpu().numpy())
+                    if dense_query is not None:
+                        all_embeddings["dense_query"].append(dense_query.cpu().numpy())
                 progress_bar.update(self.batch_size)
 
         if all_embeddings["passages"]:
             all_embeddings["passages"] = np.concatenate(all_embeddings["passages"])
         if all_embeddings["query"]:
             all_embeddings["query"] = np.concatenate(all_embeddings["query"])
+        if all_embeddings["dense_query"]:
+            all_embeddings["dense_query"] = np.concatenate(all_embeddings["dense_query"])
         return all_embeddings
 
     def embed_queries(self, texts: List[str]) -> List[np.ndarray]:
@@ -298,7 +302,7 @@ class BinaryPassageRetriever(BaseRetriever):
         :return: Embeddings, one per input queries
         """
         queries = [{"query": q} for q in texts]
-        result = self._get_predictions(queries)["query"]
+        result = self._get_predictions(queries)["dense_query"]
         return result
 
     def embed_documents(self, docs: List[Document]) -> List[np.ndarray]:
@@ -446,6 +450,8 @@ class BinaryPassageRetriever(BaseRetriever):
             device=self.devices[0],  # Only use first device while multi-gpu training is not implemented
             use_amp=use_amp,
         )
+
+        self.model.prediction_heads[0].n_passages = num_positives+num_hard_negatives
 
         # 6. Feed everything to the Trainer, which keeps care of growing our model and evaluates it from time to time
         trainer = Trainer(

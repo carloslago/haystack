@@ -439,7 +439,7 @@ class Trainer:
 
     def compute_loss(self, batch: dict, step: int) -> torch.Tensor:
         # Forward & backward pass through model
-        logits = self.model.forward(**batch)
+        logits = self.model.forward(computing_loss=True, **batch)
         per_sample_loss = self.model.logits_to_loss(logits=logits, global_step=self.global_step, **batch)
         return self.backward_propagate(per_sample_loss, step)
 
