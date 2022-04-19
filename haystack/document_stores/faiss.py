@@ -117,6 +117,9 @@ class FAISSDocumentStore(SQLDocumentStore):
         elif similarity == "l2":
             self.similarity = similarity
             self.metric_type = faiss.METRIC_L2
+        elif similarity == "hamming":
+            self.similarity = similarity
+            self.metric_type = None
         else:
             raise ValueError(
                 "The FAISS document store can currently only support dot_product, cosine and l2 similarity. "
@@ -192,6 +195,12 @@ class FAISSDocumentStore(SQLDocumentStore):
             logger.info(
                 f"HNSW params: n_links: {n_links}, efSearch: {index.hnsw.efSearch}, efConstruction: {index.hnsw.efConstruction}"
             )
+        elif "IndexBinaryFlat" == index_factory: # For BPR
+            index = faiss.IndexBinaryFlat(embedding_dim*8)
+        elif "IndexBinaryIDMap" == index_factory:
+            index = faiss.IndexBinaryIDMap(faiss.IndexBinaryFlat(embedding_dim*8))
+        elif "IndexBinaryHash" == index_factory:
+            index = faiss.IndexBinaryHash(embedding_dim*8, embedding_dim)
         else:
             index = faiss.index_factory(embedding_dim, index_factory, metric_type)
         return index
@@ -258,10 +267,14 @@ class FAISSDocumentStore(SQLDocumentStore):
                 for i in range(0, len(document_objects), batch_size):
                     if add_vectors:
                         embeddings = [doc.embedding for doc in document_objects[i : i + batch_size]]
-                        embeddings_to_index = np.array(embeddings, dtype="float32")
 
-                        if self.similarity == "cosine":
-                            self.normalize_embedding(embeddings_to_index)
+                        if self.similarity == "hamming":
+                            embeddings_to_index = np.array(embeddings, dtype="uint8")
+                        else:
+                            embeddings_to_index = np.array(embeddings, dtype="float32")
+
+                            if self.similarity == "cosine":
+                                self.normalize_embedding(embeddings_to_index)
 
                         self.faiss_indexes[index].add(embeddings_to_index)
 
@@ -272,6 +285,7 @@ class FAISSDocumentStore(SQLDocumentStore):
                             meta["vector_id"] = vector_id
                             vector_id += 1
                         docs_to_write_in_sql.append(doc)
+
 
                     super(FAISSDocumentStore, self).write_documents(
                         docs_to_write_in_sql,
@@ -343,17 +357,24 @@ class FAISSDocumentStore(SQLDocumentStore):
                 embeddings = retriever.embed_documents(document_batch)  # type: ignore
                 assert len(document_batch) == len(embeddings)
 
-                embeddings_to_index = np.array(embeddings, dtype="float32")
-
-                if self.similarity == "cosine":
-                    self.normalize_embedding(embeddings_to_index)
-
-                self.faiss_indexes[index].add(embeddings_to_index)
-
                 vector_id_map = {}
                 for doc in document_batch:
                     vector_id_map[str(doc.id)] = str(vector_id)
                     vector_id += 1
+
+                if self.similarity == "hamming":
+                    embeddings_to_index = np.array(embeddings, dtype="uint8")
+                    # ids = np.array([vector_id_map[str(doc.id)] for doc in document_batch], dtype=np.int)
+                    # self.faiss_indexes[index].add_with_ids(embeddings_to_index, ids)
+                    self.faiss_indexes[index].add(embeddings_to_index)
+                else:
+                    embeddings_to_index = np.array(embeddings, dtype="float32")
+
+                    if self.similarity == "cosine":
+                        self.normalize_embedding(embeddings_to_index)
+
+                    self.faiss_indexes[index].add(embeddings_to_index)
+
                 self.update_vector_ids(vector_id_map, index=index)
                 progress_bar.set_description_str("Documents Processed")
                 progress_bar.update(batch_size)
@@ -558,10 +579,12 @@ class FAISSDocumentStore(SQLDocumentStore):
         if return_embedding is None:
             return_embedding = self.return_embedding
 
-        query_emb = query_emb.reshape(1, -1).astype(np.float32)
-
-        if self.similarity == "cosine":
-            self.normalize_embedding(query_emb)
+        if self.similarity == "hamming":
+            query_emb = query_emb.reshape(1, -1).astype(np.uint8)
+        else:
+            query_emb = query_emb.reshape(1, -1).astype(np.float32)
+            if self.similarity == "cosine":
+                self.normalize_embedding(query_emb)
 
         score_matrix, vector_id_matrix = self.faiss_indexes[index].search(query_emb, top_k)
         vector_ids_for_query = [str(vector_id) for vector_id in vector_id_matrix[0] if vector_id != -1]
@@ -577,7 +600,10 @@ class FAISSDocumentStore(SQLDocumentStore):
             doc.score = self.finalize_raw_score(raw_score, self.similarity)
 
             if return_embedding is True:
+                # try:
                 doc.embedding = self.faiss_indexes[index].reconstruct(int(doc.meta["vector_id"]))
+                # except:
+                #     pass
 
         return documents
 
@@ -597,7 +623,10 @@ class FAISSDocumentStore(SQLDocumentStore):
             index_path = Path(index_path)
             config_path = index_path.with_suffix(".json")
 
-        faiss.write_index(self.faiss_indexes[self.index], str(index_path))
+        if self.similarity == "hamming":
+            faiss.write_index_binary(self.faiss_indexes[self.index], str(index_path))
+        else:
+            faiss.write_index(self.faiss_indexes[self.index], str(index_path))
 
         config_to_save = deepcopy(self._component_config["params"])
         keys_to_remove = ["faiss_index", "faiss_index_path"]
@@ -626,7 +655,10 @@ class FAISSDocumentStore(SQLDocumentStore):
                 "to access it."
             ) from e
 
-        faiss_index = faiss.read_index(str(index_path))
+        if init_params["similarity"] == "hamming":
+            faiss_index = faiss.read_index_binary(str(index_path))
+        else:
+            faiss_index = faiss.read_index(str(index_path))
 
         # Add other init params to override the ones defined in the init params file
         init_params["faiss_index"] = faiss_index

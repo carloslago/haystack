@@ -22,7 +22,7 @@ from haystack.modeling.data_handler.dataloader import NamedDataLoader
 from haystack.modeling.model.optimization import initialize_optimizer
 from haystack.modeling.training.base import Trainer, EarlyStopping
 from haystack.modeling.utils import initialize_device_settings
-from haystack.modeling.model.hash_layer import HashLayer
+from copy import deepcopy
 import math
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,7 @@ class BinaryPassageRetriever(BaseRetriever):
         devices: Optional[List[Union[int, str, torch.device]]] = None,
         use_auth_token: Optional[Union[str, bool]] = None,
         hashnet_gamma: float=0.1,
+        candidates: int=1000,
     ):
         """
         Init the Retriever incl. the two encoder models from a local or remote model checkpoint.
@@ -123,6 +124,7 @@ class BinaryPassageRetriever(BaseRetriever):
         self.progress_bar = progress_bar
         self.top_k = top_k
         self.hashnet_gamma = hashnet_gamma
+        self.candidates = candidates
 
         if document_store is None:
             logger.warning(
@@ -166,10 +168,6 @@ class BinaryPassageRetriever(BaseRetriever):
             language_model_class="DPRContextEncoder",
             use_auth_token=use_auth_token,
         )
-
-        # Hash layers
-        self.passage_hash = HashLayer()
-        self.query_hash = HashLayer()
 
         self.processor = TextSimilarityProcessor(
             query_tokenizer=self.query_tokenizer,
@@ -225,9 +223,28 @@ class BinaryPassageRetriever(BaseRetriever):
             return []
         if index is None:
             index = self.document_store.index
-        query_emb = self.embed_queries(texts=[query])
+        query_emb_dense, query_emb_binary = self.embed_queries(texts=[query])
+
+        # self.document_store.similarity = "hamming"
+        # documents = self.document_store.query_by_embedding(
+        #     query_emb=query_emb_binary[0], top_k=self.candidates, filters=filters, index=index, headers=headers,
+        #     return_embedding=True
+        # )
+        # self.document_store.similarity = "dot_product"
+        # scores = self.document_store.get_scores(query_emb_dense[0], documents)
+        # candidate_docs = []
+        # for doc, score in zip(documents, scores):
+        #     curr_meta = deepcopy(doc.meta)
+        #     new_document = Document(id=doc.id, content=doc.content, meta=curr_meta, embedding=None)
+        #     new_document.score = self.document_store.finalize_raw_score(score, self.document_store.similarity)
+        #     candidate_docs.append(new_document)
+        #
+        # self.document_store.similarity == "hamming"
+        # return sorted(candidate_docs, key=lambda x: x.score if x.score is not None else 0.0, reverse=True)[0:top_k]
+
         documents = self.document_store.query_by_embedding(
-            query_emb=query_emb[0], top_k=top_k, filters=filters, index=index, headers=headers
+            query_emb=query_emb_binary[0], top_k=self.top_k, filters=filters, index=index, headers=headers,
+            return_embedding=True
         )
         return documents
 
@@ -302,8 +319,8 @@ class BinaryPassageRetriever(BaseRetriever):
         :return: Embeddings, one per input queries
         """
         queries = [{"query": q} for q in texts]
-        result = self._get_predictions(queries)["dense_query"]
-        return result
+        result = self._get_predictions(queries)
+        return result["dense_query"], result["query"]
 
     def embed_documents(self, docs: List[Document]) -> List[np.ndarray]:
         """

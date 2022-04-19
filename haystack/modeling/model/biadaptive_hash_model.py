@@ -308,7 +308,7 @@ class BiAdaptiveHashModel(nn.Module):
                 # else:
                 binary_query = None
                 binary_context = None
-                if embedding1 is not None: binary_query = self.convert_to_binary_code(embedding1) # .to(torch.int8)
+                if embedding1 is not None: binary_query = self.convert_to_binary_code(embedding1) #.to(torch.uint8)
                 if embedding2 is not None: binary_context = self.convert_to_binary_code(embedding2)
                 all_logits.append(tuple([binary_query, binary_context, embedding1]))
         else:
