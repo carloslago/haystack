@@ -223,29 +223,28 @@ class BinaryPassageRetriever(BaseRetriever):
             return []
         if index is None:
             index = self.document_store.index
-        query_emb_dense, query_emb_binary = self.embed_queries(texts=[query])
+        query_embeddings, query_emb_binary = self.embed_queries(texts=[query])
 
-        # self.document_store.similarity = "hamming"
-        # documents = self.document_store.query_by_embedding(
-        #     query_emb=query_emb_binary[0], top_k=self.candidates, filters=filters, index=index, headers=headers,
-        #     return_embedding=True
-        # )
-        # self.document_store.similarity = "dot_product"
-        # scores = self.document_store.get_scores(query_emb_dense[0], documents)
-        # candidate_docs = []
-        # for doc, score in zip(documents, scores):
-        #     curr_meta = deepcopy(doc.meta)
-        #     new_document = Document(id=doc.id, content=doc.content, meta=curr_meta, embedding=None)
-        #     new_document.score = self.document_store.finalize_raw_score(score, self.document_store.similarity)
-        #     candidate_docs.append(new_document)
-        #
-        # self.document_store.similarity == "hamming"
-        # return sorted(candidate_docs, key=lambda x: x.score if x.score is not None else 0.0, reverse=True)[0:top_k]
-
-        documents = self.document_store.query_by_embedding(
-            query_emb=query_emb_binary[0], top_k=self.top_k, filters=filters, index=index, headers=headers,
+        documents_candidate = self.document_store.query_by_embedding(
+            query_emb=query_emb_binary[0], top_k=self.candidates, filters=filters, index=index, headers=headers,
             return_embedding=True
         )
+
+        passage_embeddings = np.array([d.embedding for d in documents_candidate])
+
+        passage_embeddings = passage_embeddings.reshape(
+            query_emb_binary.shape[0], passage_embeddings.shape[0], query_emb_binary.shape[1]
+        )
+        passage_embeddings = passage_embeddings.astype(np.float32)
+
+        scores_arr = np.einsum("ijk,ik->ij", passage_embeddings, query_embeddings)
+        sorted_indices = np.argsort(scores_arr, axis=1)[0][:top_k]
+        documents = [documents_candidate[i] for i in sorted_indices]
+
+        # documents = self.document_store.query_by_embedding(
+        #     query_emb=query_emb_binary[0], top_k=self.top_k, filters=filters, index=index, headers=headers,
+        #     return_embedding=True
+        # )
         return documents
 
     def _get_predictions(self, dicts):
@@ -285,7 +284,7 @@ class BinaryPassageRetriever(BaseRetriever):
             total=len(data_loader) * self.batch_size,
             unit=" Docs",
             desc=f"Create embeddings",
-            position=1,
+            position=0,
             leave=False,
             disable=disable_tqdm,
         ) as progress_bar:

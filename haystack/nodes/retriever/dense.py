@@ -268,7 +268,7 @@ class DensePassageRetriever(BaseRetriever):
             total=len(data_loader) * self.batch_size,
             unit=" Docs",
             desc=f"Create embeddings",
-            position=1,
+            position=0,
             leave=False,
             disable=disable_tqdm,
         ) as progress_bar:

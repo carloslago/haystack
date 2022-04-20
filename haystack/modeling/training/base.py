@@ -8,7 +8,7 @@ import logging
 import dill
 import numpy
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from pathlib import Path
 
 from torch.nn import MSELoss, Linear, Module, ModuleList, DataParallel
