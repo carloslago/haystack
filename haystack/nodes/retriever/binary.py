@@ -242,7 +242,7 @@ class BinaryPassageRetriever(BaseRetriever):
         # documents = [documents_candidate[i] for i in sorted_indices]
 
         documents = self.document_store.query_by_embedding(
-            query_emb=query_emb_binary[0], top_k=self.top_k, filters=filters, index=index, headers=headers,
+            query_emb=query_emb_binary[0], top_k=top_k, filters=filters, index=index, headers=headers,
             return_embedding=True
         )
         return documents
