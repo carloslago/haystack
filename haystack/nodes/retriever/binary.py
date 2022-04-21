@@ -216,35 +216,35 @@ class BinaryPassageRetriever(BaseRetriever):
         :param top_k: How many documents to return per query.
         :param index: The name of the index in the DocumentStore from which to retrieve documents
         """
-        if top_k is None:
-            top_k = self.top_k
-        if not self.document_store:
-            logger.error("Cannot perform retrieve() since DensePassageRetriever initialized with document_store=None")
-            return []
-        if index is None:
-            index = self.document_store.index
-        query_embeddings, query_emb_binary = self.embed_queries(texts=[query])
-
-        documents_candidate = self.document_store.query_by_embedding(
-            query_emb=query_emb_binary[0], top_k=self.candidates, filters=filters, index=index, headers=headers,
-            return_embedding=True
-        )
-
-        passage_embeddings = np.array([d.embedding for d in documents_candidate])
-
-        passage_embeddings = passage_embeddings.reshape(
-            query_emb_binary.shape[0], passage_embeddings.shape[0], query_emb_binary.shape[1]
-        )
-        passage_embeddings = passage_embeddings.astype(np.float32)
-
-        scores_arr = np.einsum("ijk,ik->ij", passage_embeddings, query_embeddings)
-        sorted_indices = np.argsort(scores_arr, axis=1)[0][:top_k]
-        documents = [documents_candidate[i] for i in sorted_indices]
-
-        # documents = self.document_store.query_by_embedding(
-        #     query_emb=query_emb_binary[0], top_k=self.top_k, filters=filters, index=index, headers=headers,
+        # if top_k is None:
+        #     top_k = self.top_k
+        # if not self.document_store:
+        #     logger.error("Cannot perform retrieve() since DensePassageRetriever initialized with document_store=None")
+        #     return []
+        # if index is None:
+        #     index = self.document_store.index
+        # query_embeddings, query_emb_binary = self.embed_queries(texts=[query])
+        #
+        # documents_candidate = self.document_store.query_by_embedding(
+        #     query_emb=query_emb_binary[0], top_k=self.candidates, filters=filters, index=index, headers=headers,
         #     return_embedding=True
         # )
+        #
+        # passage_embeddings = np.array([d.embedding for d in documents_candidate])
+        #
+        # passage_embeddings = passage_embeddings.reshape(
+        #     query_emb_binary.shape[0], passage_embeddings.shape[0], query_emb_binary.shape[1]
+        # )
+        # passage_embeddings = passage_embeddings.astype(np.float32)
+        #
+        # scores_arr = np.einsum("ijk,ik->ij", passage_embeddings, query_embeddings)
+        # sorted_indices = np.argsort(scores_arr, axis=1)[0][:top_k]
+        # documents = [documents_candidate[i] for i in sorted_indices]
+
+        documents = self.document_store.query_by_embedding(
+            query_emb=query_emb_binary[0], top_k=self.top_k, filters=filters, index=index, headers=headers,
+            return_embedding=True
+        )
         return documents
 
     def _get_predictions(self, dicts):
