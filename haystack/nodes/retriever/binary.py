@@ -216,14 +216,14 @@ class BinaryPassageRetriever(BaseRetriever):
         :param top_k: How many documents to return per query.
         :param index: The name of the index in the DocumentStore from which to retrieve documents
         """
-        # if top_k is None:
-        #     top_k = self.top_k
-        # if not self.document_store:
-        #     logger.error("Cannot perform retrieve() since DensePassageRetriever initialized with document_store=None")
-        #     return []
-        # if index is None:
-        #     index = self.document_store.index
-        # query_embeddings, query_emb_binary = self.embed_queries(texts=[query])
+        if top_k is None:
+            top_k = self.top_k
+        if not self.document_store:
+            logger.error("Cannot perform retrieve() since DensePassageRetriever initialized with document_store=None")
+            return []
+        if index is None:
+            index = self.document_store.index
+        query_embeddings, query_emb_binary = self.embed_queries(texts=[query])
         #
         # documents_candidate = self.document_store.query_by_embedding(
         #     query_emb=query_emb_binary[0], top_k=self.candidates, filters=filters, index=index, headers=headers,
