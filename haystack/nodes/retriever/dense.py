@@ -225,11 +225,31 @@ class DensePassageRetriever(BaseRetriever):
             return []
         if index is None:
             index = self.document_store.index
-        query_emb = self.embed_queries(texts=[query])
+        # query_emb = self.embed_queries(texts=[query])
+        query_emb = self.embed_one_query(query=[{"query": query}])
         documents = self.document_store.query_by_embedding(
             query_emb=query_emb[0], top_k=top_k, filters=filters, index=index, headers=headers
         )
         return documents
+
+
+    def embed_one_query(self, query):
+        dataset, tensor_names, _, baskets = self.processor.dataset_from_dicts(
+            query, indices=[i for i in range(len(query))], return_baskets=True
+        )
+
+        data_loader = NamedDataLoader(
+            dataset=dataset, sampler=SequentialSampler(dataset), batch_size=self.batch_size, tensor_names=tensor_names
+        )
+
+        # self.model.eval() # Changed to eval() method to avoid doing it every query
+
+        for batch in data_loader:
+            batch = {key: batch[key].to(self.devices[0]) for key in batch}
+            with torch.no_grad():
+                query_embeddings, passage_embeddings = self.model.forward(**batch)[0]
+                return query_embeddings.cpu().numpy()
+        return None
 
     def _get_predictions(self, dicts):
         """

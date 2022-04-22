@@ -199,6 +199,7 @@ class BinaryPassageRetriever(BaseRetriever):
         if len(self.devices) > 1:
             self.model = DataParallel(self.model, device_ids=self.devices)
 
+
     def retrieve(
         self,
         query: str,
@@ -223,29 +224,54 @@ class BinaryPassageRetriever(BaseRetriever):
             return []
         if index is None:
             index = self.document_store.index
-        query_embeddings, query_emb_binary = self.embed_queries(texts=[query])
-        #
-        # documents_candidate = self.document_store.query_by_embedding(
-        #     query_emb=query_emb_binary[0], top_k=self.candidates, filters=filters, index=index, headers=headers,
-        #     return_embedding=True
-        # )
-        #
-        # passage_embeddings = np.array([d.embedding for d in documents_candidate])
-        #
-        # passage_embeddings = passage_embeddings.reshape(
-        #     query_emb_binary.shape[0], passage_embeddings.shape[0], query_emb_binary.shape[1]
-        # )
-        # passage_embeddings = passage_embeddings.astype(np.float32)
-        #
-        # scores_arr = np.einsum("ijk,ik->ij", passage_embeddings, query_embeddings)
-        # sorted_indices = np.argsort(scores_arr, axis=1)[0][:top_k]
-        # documents = [documents_candidate[i] for i in sorted_indices]
+        # query_embeddings, query_emb_binary = self.embed_queries(texts=[query])
+        query_embeddings, query_emb_binary = self.embed_one_query(query=[{"query": query}])
 
-        documents = self.document_store.query_by_embedding(
-            query_emb=query_emb_binary[0], top_k=top_k, filters=filters, index=index, headers=headers,
-            return_embedding=True
+        if self.candidates>len(self.document_store.all_documents):
+            self.candidates=len(self.document_store.all_documents)
+
+        bin_query_embeddings = np.packbits(np.where(query_emb_binary > 0, 1, 0), axis=-1).reshape(1, -1)
+
+        raw_index = self.document_store.faiss_indexes[index]
+        _, ids_arr = raw_index.search(bin_query_embeddings, self.candidates)
+
+        passage_embeddings = np.vstack(
+            [np.unpackbits(raw_index.reconstruct(int(id_))) for id_ in ids_arr.reshape(-1)]
         )
+
+        passage_embeddings = passage_embeddings.reshape(
+            query_embeddings.shape[0], passage_embeddings.shape[0], query_embeddings.shape[1]
+        )
+        passage_embeddings = passage_embeddings.astype(np.float32)
+
+        passage_embeddings = passage_embeddings * 2 - 1 # Turns 1, 0 into 1, -1
+
+        scores_arr = np.einsum("ijk,ik->ij", passage_embeddings, query_embeddings)
+        sorted_indices = np.argsort(-scores_arr, axis=1)[0][:top_k]
+        documents = [self.document_store.all_documents[ids_arr[0][i]] for i in sorted_indices]
+        # documents = self.document_store.query_by_embedding(
+        #     query_emb=query_emb_binary[0], top_k=top_k, filters=filters, index=index, headers=headers,
+        #     return_embedding=False
+        # )
         return documents
+
+    def embed_one_query(self, query):
+        dataset, tensor_names, _, baskets = self.processor.dataset_from_dicts(
+            query, indices=[i for i in range(len(query))], return_baskets=True
+        )
+
+        data_loader = NamedDataLoader(
+            dataset=dataset, sampler=SequentialSampler(dataset), batch_size=self.batch_size, tensor_names=tensor_names
+        )
+
+        # self.model.eval() # Changed to eval() method to avoid doing it every query
+
+        for batch in data_loader:
+            batch = {key: batch[key].to(self.devices[0]) for key in batch}
+            with torch.no_grad():
+                binary_query, binary_passage, dense_query = self.model.forward(**batch)[0]
+                return dense_query.cpu().numpy(), binary_query.cpu().numpy()
+        return None
 
     def _get_predictions(self, dicts):
         """

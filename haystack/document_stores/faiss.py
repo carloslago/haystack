@@ -11,6 +11,7 @@ from copy import deepcopy
 from pathlib import Path
 from tqdm.auto import tqdm
 from inspect import Signature, signature
+from timeit import default_timer as timer
 
 try:
     import faiss
@@ -157,6 +158,8 @@ class FAISSDocumentStore(SQLDocumentStore):
 
         self._validate_index_sync()
 
+        self.all_documents = None
+
     def _validate_params_load_from_disk(self, sig: Signature, locals: dict, kwargs: dict):
         allowed_params = ["faiss_index_path", "faiss_config_path", "self", "kwargs"]
         invalid_param_set = False
@@ -196,7 +199,8 @@ class FAISSDocumentStore(SQLDocumentStore):
                 f"HNSW params: n_links: {n_links}, efSearch: {index.hnsw.efSearch}, efConstruction: {index.hnsw.efConstruction}"
             )
         elif "IndexBinaryFlat" == index_factory: # For BPR
-            index = faiss.IndexBinaryFlat(embedding_dim*8)
+            # index = faiss.IndexBinaryFlat(embedding_dim*8)
+            index = faiss.IndexBinaryFlat(embedding_dim)
         elif "IndexBinaryIDMap" == index_factory:
             index = faiss.IndexBinaryIDMap(faiss.IndexBinaryFlat(embedding_dim*8))
         elif "IndexBinaryHash" == index_factory:
@@ -269,7 +273,8 @@ class FAISSDocumentStore(SQLDocumentStore):
                         embeddings = [doc.embedding for doc in document_objects[i : i + batch_size]]
 
                         if self.similarity == "hamming":
-                            embeddings_to_index = np.array(embeddings, dtype="uint8")
+                            # embeddings_to_index = np.array(embeddings, dtype="uint8")
+                            embeddings_to_index = np.packbits(np.where(embeddings > 0, 1, 0), axis=-1)
                         else:
                             embeddings_to_index = np.array(embeddings, dtype="float32")
 
@@ -363,21 +368,21 @@ class FAISSDocumentStore(SQLDocumentStore):
                     vector_id += 1
 
                 if self.similarity == "hamming":
-                    embeddings_to_index = np.array(embeddings, dtype="uint8")
-                    # ids = np.array([vector_id_map[str(doc.id)] for doc in document_batch], dtype=np.int)
-                    # self.faiss_indexes[index].add_with_ids(embeddings_to_index, ids)
-                    self.faiss_indexes[index].add(embeddings_to_index)
+                    # embeddings_to_index = np.array(embeddings, dtype="uint8")
+                    embeddings_to_index = np.packbits(np.where(embeddings > 0, 1, 0), axis=-1)
                 else:
                     embeddings_to_index = np.array(embeddings, dtype="float32")
 
                     if self.similarity == "cosine":
                         self.normalize_embedding(embeddings_to_index)
 
-                    self.faiss_indexes[index].add(embeddings_to_index)
+                self.faiss_indexes[index].add(embeddings_to_index)
 
                 self.update_vector_ids(vector_id_map, index=index)
                 progress_bar.set_description_str("Documents Processed")
                 progress_bar.update(batch_size)
+
+        self.all_documents = self.get_all_documents(index=self.index)
 
     def get_all_documents(
         self,
@@ -580,18 +585,22 @@ class FAISSDocumentStore(SQLDocumentStore):
             return_embedding = self.return_embedding
 
         if self.similarity == "hamming":
-            query_emb = query_emb.reshape(1, -1).astype(np.uint8)
+            # query_emb = query_emb.reshape(1, -1).astype(np.uint8)
+            query_emb = np.packbits(np.where(query_emb > 0, 1, 0), axis=-1).reshape(1, -1)
         else:
             query_emb = query_emb.reshape(1, -1).astype(np.float32)
             if self.similarity == "cosine":
                 self.normalize_embedding(query_emb)
 
+
+
         score_matrix, vector_id_matrix = self.faiss_indexes[index].search(query_emb, top_k)
+
         vector_ids_for_query = [str(vector_id) for vector_id in vector_id_matrix[0] if vector_id != -1]
 
-        documents = self.get_documents_by_vector_ids(vector_ids_for_query, index=index)
+        # documents = self.get_documents_by_vector_ids(vector_ids_for_query, index=index)
+        documents = [self.all_documents[int(i)] for i in vector_ids_for_query]
 
-        # assign query score to each document
         scores_for_vector_ids: Dict[str, float] = {
             str(v_id): s for v_id, s in zip(vector_id_matrix[0], score_matrix[0])
         }
@@ -600,10 +609,7 @@ class FAISSDocumentStore(SQLDocumentStore):
             doc.score = self.finalize_raw_score(raw_score, self.similarity)
 
             if return_embedding is True:
-                # try:
                 doc.embedding = self.faiss_indexes[index].reconstruct(int(doc.meta["vector_id"]))
-                # except:
-                #     pass
 
         return documents
 

@@ -1258,43 +1258,9 @@ class BinarySimilarityHead(PredictionHead):
         # Prepare Labels
         positive_idx_per_question = torch.nonzero((label_ids.view(-1) == 1), as_tuple=False)
 
-        # Gather global embeddings from all distributed nodes (DDP)
-        if rank != -1:
-            q_vector_to_send = torch.empty_like(query_dense_vectors).cpu().copy_(query_dense_vectors).detach_()
-            p_vector_to_send = torch.empty_like(passage_binary_vectors).cpu().copy_(passage_binary_vectors).detach_()
-
-            global_question_passage_vectors = all_gather_list(
-                [q_vector_to_send, p_vector_to_send, positive_idx_per_question], max_size=self.global_loss_buffer_size
-            )
-
-            global_query_vectors = []
-            global_passage_vectors = []
-            global_positive_idx_per_question = []
-            total_passages = 0
-            for i, item in enumerate(global_question_passage_vectors):
-                q_vector, p_vectors, positive_idx = item
-
-                if i != rank:
-                    global_query_vectors.append(q_vector.to(query_dense_vectors.device))
-                    global_passage_vectors.append(p_vectors.to(passage_binary_vectors.device))
-                    global_positive_idx_per_question.extend([v + total_passages for v in positive_idx])
-                else:
-                    global_query_vectors.append(query_dense_vectors)
-                    global_passage_vectors.append(passage_binary_vectors)
-                    global_positive_idx_per_question.extend([v + total_passages for v in positive_idx_per_question])
-                total_passages += p_vectors.size(0)
-
-            global_query_vectors = torch.cat(global_query_vectors, dim=0)  # type: ignore
-            global_passage_vectors = torch.cat(global_passage_vectors, dim=0)  # type: ignore
-            global_positive_idx_per_question = torch.LongTensor(global_positive_idx_per_question)  # type: ignore
-        else:
-            global_query_vectors = query_dense_vectors  # type: ignore
-            global_passage_vectors = passage_binary_vectors  # type: ignore
-            global_positive_idx_per_question = positive_idx_per_question  # type: ignore
-
         # Get similarity scores
-        softmax_scores = self._embeddings_to_scores(global_query_vectors, global_passage_vectors)  # type: ignore
-        targets = global_positive_idx_per_question.squeeze(-1).to(softmax_scores.device)  # type: ignore
+        softmax_scores = self._embeddings_to_scores(query_dense_vectors, passage_binary_vectors)
+        targets = positive_idx_per_question.squeeze(-1).to(softmax_scores.device)
 
         # Calculate loss
         loss = self.loss_fct(softmax_scores, targets)
