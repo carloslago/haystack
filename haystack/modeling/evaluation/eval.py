@@ -4,7 +4,7 @@ import logging
 import numbers
 import torch
 import numpy as np
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from haystack.modeling.evaluation.metrics import compute_metrics, compute_report_metrics
 from haystack.modeling.model.adaptive_model import AdaptiveModel
@@ -54,7 +54,7 @@ class Evaluator:
         passage_start_t_all: List = [[] for _ in model.prediction_heads]
         logits_all: List = [[] for _ in model.prediction_heads]
 
-        for step, batch in enumerate(tqdm(self.data_loader, desc="Evaluating", mininterval=10)):
+        for step, batch in enumerate(tqdm(self.data_loader, desc="Evaluating", mininterval=10, position=0, leave=True)):
             batch = {key: batch[key].to(self.device) for key in batch}
 
             with torch.no_grad():

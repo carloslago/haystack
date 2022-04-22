@@ -157,6 +157,8 @@ class BaseRetriever(BaseComponent):
 
         predictions = []
 
+        self.model.eval()
+
         # Option 1: Open-domain evaluation by checking if the answer string is in the retrieved docs
         logger.info("Performing eval queries...")
         if open_domain:

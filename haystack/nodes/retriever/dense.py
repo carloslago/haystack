@@ -228,11 +228,31 @@ class DensePassageRetriever(BaseRetriever):
             return []
         if index is None:
             index = self.document_store.index
-        query_emb = self.embed_queries(texts=[query])
+        # query_emb = self.embed_queries(texts=[query])
+        query_emb = self.embed_one_query(query=[{"query": query}])
         documents = self.document_store.query_by_embedding(
             query_emb=query_emb[0], top_k=top_k, filters=filters, index=index, headers=headers
         )
         return documents
+
+
+    def embed_one_query(self, query):
+        dataset, tensor_names, _, baskets = self.processor.dataset_from_dicts(
+            query, indices=[i for i in range(len(query))], return_baskets=True
+        )
+
+        data_loader = NamedDataLoader(
+            dataset=dataset, sampler=SequentialSampler(dataset), batch_size=self.batch_size, tensor_names=tensor_names
+        )
+
+        # self.model.eval() # Changed to eval() method to avoid doing it every query
+
+        for batch in data_loader:
+            batch = {key: batch[key].to(self.devices[0]) for key in batch}
+            with torch.no_grad():
+                query_embeddings, passage_embeddings = self.model.forward(**batch)[0]
+                return query_embeddings.cpu().numpy()
+        return None
 
     def _get_predictions(self, dicts):
         """
@@ -271,7 +291,7 @@ class DensePassageRetriever(BaseRetriever):
             total=len(data_loader) * self.batch_size,
             unit=" Docs",
             desc=f"Create embeddings",
-            position=1,
+            position=0,
             leave=False,
             disable=disable_tqdm,
         ) as progress_bar:
@@ -346,6 +366,12 @@ class DensePassageRetriever(BaseRetriever):
         multiprocessing_strategy: Optional[str] = None,
         early_stopping: Optional[EarlyStopping] = None,
         logging_wandb: bool=False,
+        checkpoint_every: Optional[int] = None,
+        checkpoint_root_dir: Optional[Path] = None,
+        from_epoch: int = 0,
+        from_step: int = 0,
+        checkpoint_on_sigterm: bool = False,
+        checkpoints_to_keep: int = 5,
         dev_split: float = 0,
         batch_size: int = 2,
         embed_title: bool = True,
@@ -458,6 +484,15 @@ class DensePassageRetriever(BaseRetriever):
             early_stopping=early_stopping,
             logging_wandb=logging_wandb,
             eval_report=False,
+            checkpoint_every=checkpoint_every,
+            checkpoint_root_dir=checkpoint_root_dir,
+            from_epoch=from_epoch,
+            from_step=from_step,
+            checkpoint_on_sigterm=checkpoint_on_sigterm,
+            checkpoints_to_keep=checkpoints_to_keep,
+            query_encoder_save_dir=query_encoder_save_dir,
+            passage_encoder_save_dir=passage_encoder_save_dir,
+            retriever=self
         )
 
         # 7. Let it grow! Watch the tracked metrics live on the public mlflow server: https://public-mlflow.deepset.ai
@@ -484,8 +519,7 @@ class DensePassageRetriever(BaseRetriever):
         :param passage_encoder_dir: Directory in save_dir that contains passage encoder model.
         :return: None
         """
-        save_dir = Path(save_dir)
-        self.model.save(save_dir, lm1_name=query_encoder_dir, lm2_name=passage_encoder_dir)
+        self.model.save(Path(save_dir), lm1_name=query_encoder_dir, lm2_name=passage_encoder_dir)
         save_dir = str(save_dir)
         self.query_tokenizer.save_pretrained(save_dir + f"/{query_encoder_dir}")
         self.passage_tokenizer.save_pretrained(save_dir + f"/{passage_encoder_dir}")
