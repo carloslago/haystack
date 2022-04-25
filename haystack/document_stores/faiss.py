@@ -595,21 +595,28 @@ class FAISSDocumentStore(SQLDocumentStore):
 
 
         score_matrix, vector_id_matrix = self.faiss_indexes[index].search(query_emb, top_k)
-
+        #
         vector_ids_for_query = [str(vector_id) for vector_id in vector_id_matrix[0] if vector_id != -1]
 
         # documents = self.get_documents_by_vector_ids(vector_ids_for_query, index=index)
         documents = [self.all_documents[int(i)] for i in vector_ids_for_query]
 
-        scores_for_vector_ids: Dict[str, float] = {
-            str(v_id): s for v_id, s in zip(vector_id_matrix[0], score_matrix[0])
-        }
-        for doc in documents:
-            raw_score = scores_for_vector_ids[doc.meta["vector_id"]]
-            doc.score = self.finalize_raw_score(raw_score, self.similarity)
+        # scores_for_vector_ids: Dict[str, float] = {
+        #     str(v_id): s for v_id, s in zip(vector_id_matrix[0], score_matrix[0])
+        # }
+        # for doc in documents:
+            # raw_score = scores_for_vector_ids[doc.meta["vector_id"]]
+            # doc.score = self.finalize_raw_score(raw_score, self.similarity)
+            #
+            # if return_embedding is True:
+            #     doc.embedding = self.faiss_indexes[index].reconstruct(int(doc.meta["vector_id"]))
+
+        for i in range(len(documents)):
+            raw_score = score_matrix[0][i]
+            documents[i].score = self.finalize_raw_score(raw_score, self.similarity)
 
             if return_embedding is True:
-                doc.embedding = self.faiss_indexes[index].reconstruct(int(doc.meta["vector_id"]))
+                documents[i].embedding = self.faiss_indexes[index].reconstruct(int(documents[i].meta["vector_id"]))
 
         return documents
 
